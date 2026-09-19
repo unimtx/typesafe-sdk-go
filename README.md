@@ -65,6 +65,26 @@ them for inference. Put the complete judgment in `Instructions`. State must be a
 JSON string, object, or array. Instructions and criteria entries may also be
 structured values or null.
 
+## Configuration
+
+`NewClient` accepts scoped functional options rather than a configuration
+struct. Explicit options override `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`,
+`TYPESAFE_DEFAULT_MODEL`, and `TYPESAFE_LOG_LEVEL` environment values:
+
+```go
+client, err := typesafe.NewClient(
+	option.WithAPIKey("test-key"),
+	option.WithDefaultModel("jev-latest"),
+	option.WithTimeout(10*time.Second),
+	option.WithMaxRetries(2),
+	option.WithHeader("X-Trace-ID", "trace-1"),
+)
+```
+
+API key, base URL, default model, HTTP client, logger, and log level are
+client-only settings. Timeout, retries, and headers can also be overridden on an
+individual request.
+
 ## Core primitives
 
 TypeSafe provides three question types. Questions in one request share the same
@@ -262,15 +282,29 @@ case err != nil:
 }
 ```
 
-Transient failures are retried by default. If a response is lost, a retry may
-repeat an evaluation and incur duplicate usage.
+## Retries and timeouts
+
+The SDK retries twice by default (three attempts total) after connection or
+response-body read failures, per-attempt timeouts, HTTP 408/429, and HTTP 5xx.
+Retries reuse the same serialized body. Default backoff starts at 500 ms, doubles
+to 5 seconds, and subtracts up to 25 percent jitter.
+
+For eligible responses, `retry-after-ms` takes precedence over `Retry-After`
+(seconds or HTTP date). Valid delays up to 60 seconds override local backoff;
+longer or invalid values fall back to it. Context cancellation interrupts waits.
+
+Configure client or request retries with `option.WithMaxRetries` and
+`option.WithRetryPolicy`; request options override client defaults, and zero
+retries disables them. The SDK has no total retry budget: use
+`context.WithTimeout` for the complete call and `option.WithTimeout` per attempt.
+A lost response may cause a repeated evaluation and duplicate usage.
 
 ## Production usage
 
 - Reuse one Client across concurrent calls; do not mutate request data while a
   call is using it.
-- Bound the whole call, including retries, with `context.WithTimeout`.
-  `option.WithTimeout` separately limits each HTTP attempt.
+- Bound the whole call with `context.WithTimeout`; see the retry and timeout
+  behavior above.
 - Disable or tune retries when duplicate evaluation or usage is unacceptable.
 - Use `option.WithResponseInto` for response metadata and request IDs; inject an
   `http.Client` or `slog.Logger` when transport or observability needs differ.
