@@ -262,6 +262,28 @@ case err != nil:
 Transient failures are retried by default. If a response is lost, a retry may
 repeat an evaluation and incur duplicate usage.
 
+## Production usage
+
+- Reuse one Client across concurrent calls; do not mutate request data while a
+  call is using it.
+- Bound the whole call, including retries, with `context.WithTimeout`.
+  `option.WithTimeout` separately limits each HTTP attempt.
+- Disable or tune retries when duplicate evaluation or usage is unacceptable.
+- Use `option.WithResponseInto` for response metadata and request IDs; inject an
+  `http.Client` or `slog.Logger` when transport or observability needs differ.
+
+## Maintainer live verification
+
+Run the bounded live conformance suite explicitly. It makes at most two requests
+because automatic retries are disabled:
+
+```sh
+go test -tags=integration ./integration/...
+```
+
+See [`docs/live-coverage.md`](docs/live-coverage.md) for its acceptance boundary
+and recorded runs.
+
 ## License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

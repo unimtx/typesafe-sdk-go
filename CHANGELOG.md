@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+- Add an explicitly invoked, two-request live conformance suite for Models.List
+  and a mixed Choice, Score, and Noul SystemOne request.
+- Add a weekly stable-release monitor for the pinned TypeSafe JavaScript and
+  Python SDKs, with a deduplicated drift issue and no automatic pin changes.
+
 ## [0.1.0] - 2026-09-19
 
 - Add the initial unofficial TypeSafe Go SDK with Choice, Score, Noul, raw
@@ -13,3 +20,4 @@
   from the README.
 
 [0.1.0]: https://github.com/unimtx/typesafe-sdk-go/releases/tag/v0.1.0
+[Unreleased]: https://github.com/unimtx/typesafe-sdk-go/compare/v0.1.0...HEAD

@@ -1,0 +1,47 @@
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          check-latest: true
+      - name: Check latest stable upstream releases
+        id: upstream
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          go run ./internal/tools/upstreamcheck -report "$RUNNER_TEMP/upstream-report.md"
+          if [[ -s "$RUNNER_TEMP/upstream-report.md" ]]; then
+            echo "updates=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "updates=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create or refresh the drift issue
+        if: ${{ steps.upstream.outputs.updates == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REPORT: ${{ runner.temp }}/upstream-report.md
+          TITLE: Upstream TypeSafe SDK release available
+        shell: bash
+        run: |
+          issue_number="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == "Upstream TypeSafe SDK release available") | .number' | head -n 1)"
+          if [[ -n "$issue_number" ]]; then
+            gh issue edit "$issue_number" --body-file "$REPORT"
+          else
+            gh issue create --title "$TITLE" --body-file "$REPORT"
+          fi

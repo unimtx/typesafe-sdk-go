@@ -19,6 +19,10 @@ the checked declaration baseline is `internal/tools/surfacecheck/surface.txt`.
 | Status/transport errors | sentinels, `Error`, `APIError`, `TimeoutError` | `TestAPIErrorCategoriesBodyAndDumps`, timeout/cancellation tests |
 | Retry, timeout, cancellation | `RetryPolicy`, common options, request contexts | retry and reliability tests |
 
+Live-service acceptance is tracked separately in
+[`live-coverage.md`](live-coverage.md). It is never implied by the offline
+fixtures in this table.
+
 ## Pinned JavaScript export review
 
 | JavaScript `src/index.ts` export | Go counterpart or exclusion |

@@ -2,7 +2,9 @@
 
 Reviewed on **2026-09-19**. These are source pins for the design and
 implementation. Offline conformance evidence is recorded in tests and the
-coverage matrix; it is not a claim of live-service verification.
+coverage matrix. Separately authorized live-service verification is recorded in
+[`docs/live-coverage.md`](docs/live-coverage.md); neither kind of evidence
+guarantees future service behavior.
 [DESIGN.md](DESIGN.md) owns the implementation contract; [PARITY.md](PARITY.md)
 explains adaptations and intentional omissions. Source pins and evidence are
 owned here; they do not impose exact JS parity. Public design follows Go idioms,
