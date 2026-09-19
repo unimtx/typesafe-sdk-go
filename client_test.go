@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -227,9 +228,19 @@ func TestLocalValidationBeforeNetwork(t *testing.T) {
 		{State: nil, Questions: Questions{"q": Noul("?")}},
 		{State: true, Questions: Questions{"q": Noul("?")}},
 		{State: "s", Questions: nil},
+		{State: "s", Questions: Questions{"": Noul("?")}},
+		{State: "s", Questions: Questions{"q": Choice("?", nil)}},
+		{State: "s", Questions: Questions{"q": Choice("?", choiceCriteria(256))}},
 		{State: "s", Questions: Questions{"q": Score[Entry]("?")}},
 		{State: "s", Questions: Questions{"q": Score("?", "only")}},
+		{State: "s", Questions: Questions{"q": Score("?", make([]string, 11)...)}},
+		{State: "s", Questions: Questions{"q": NoulQuestion{}}},
+		{State: "s", Questions: Questions{"q": NoulQuestion{Criteria: &NoulCriteria{True: json.RawMessage("null")}}}},
+		{State: "s", Questions: Questions{"q": RawQuestion{JSON: []byte(`{"type":"choice","instructions":"?","criteria":{}}`)}}},
+		{State: "s", Questions: Questions{"q": RawQuestion{JSON: rawChoiceQuestion(256)}}},
 		{State: "s", Questions: Questions{"q": RawQuestion{JSON: []byte(`{"type":"score","criteria":{}}`)}}},
+		{State: "s", Questions: Questions{"q": RawQuestion{JSON: rawScoreQuestion(11)}}},
+		{State: "s", Questions: Questions{"q": RawQuestion{JSON: []byte(`{"type":"noul","instructions":null,"criteria":{}}`)}}},
 		{State: "s", Questions: Questions{"q": RawQuestion{JSON: []byte(`{"x":1}`)}}},
 	}
 	for i, req := range tests {
@@ -241,6 +252,67 @@ func TestLocalValidationBeforeNetwork(t *testing.T) {
 	if _, err := c.SystemOne(context.Background(), SystemOneRequest{State: "s", Questions: Questions{"q": nilQuestion}}); err == nil {
 		t.Fatal("accepted typed-nil question")
 	}
+}
+
+func TestNoulValidationAllowsInstructionsOrCriteria(t *testing.T) {
+	tests := []Questions{
+		{"q": Noul("")},
+		{"q": NoulQuestion{Criteria: &NoulCriteria{True: ""}}},
+		{"q": RawQuestion{JSON: []byte(`{"type":"noul","criteria":{"false":{"meaning":"no"}}}`)}},
+	}
+	for i, questions := range tests {
+		body, err := json.Marshal(struct {
+			State     Entry     `json:"state"`
+			Questions Questions `json:"questions"`
+		}{State: "s", Questions: questions})
+		if err != nil {
+			t.Fatalf("case %d marshal: %v", i, err)
+		}
+		if err := validateSystemOnePayload(body, questions); err != nil {
+			t.Errorf("case %d: %v", i, err)
+		}
+	}
+}
+
+func TestQuestionValidationAcceptsDocumentedLimits(t *testing.T) {
+	tests := []Questions{
+		{"q": Choice("?", ChoiceCriteria{"only": nil})},
+		{"q": Choice("?", choiceCriteria(255))},
+		{"q": Score("?", "low", "high")},
+		{"q": Score("?", make([]string, 10)...)},
+		{"q": RawQuestion{JSON: rawChoiceQuestion(255)}},
+		{"q": RawQuestion{JSON: rawScoreQuestion(10)}},
+	}
+	for i, questions := range tests {
+		body, err := json.Marshal(struct {
+			State     Entry     `json:"state"`
+			Questions Questions `json:"questions"`
+		}{State: "s", Questions: questions})
+		if err != nil {
+			t.Fatalf("case %d marshal: %v", i, err)
+		}
+		if err := validateSystemOnePayload(body, questions); err != nil {
+			t.Errorf("case %d: %v", i, err)
+		}
+	}
+}
+
+func choiceCriteria(count int) ChoiceCriteria {
+	criteria := make(ChoiceCriteria, count)
+	for i := range count {
+		criteria[strconv.Itoa(i)] = nil
+	}
+	return criteria
+}
+
+func rawChoiceQuestion(count int) json.RawMessage {
+	raw, _ := json.Marshal(ChoiceQuestion{Instructions: "?", Criteria: choiceCriteria(count)})
+	return raw
+}
+
+func rawScoreQuestion(count int) json.RawMessage {
+	raw, _ := json.Marshal(ScoreQuestion{Instructions: "?", Criteria: make([]Entry, count)})
+	return raw
 }
 
 func TestModelResolutionDoesNotMutateRequest(t *testing.T) {

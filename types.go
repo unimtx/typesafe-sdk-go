@@ -62,14 +62,14 @@ func (q ChoiceQuestion) MarshalJSON() ([]byte, error) {
 type ScoreQuestion struct {
 	// Instructions describe the judgment and always serialize, including as null.
 	Instructions Entry `json:"instructions"`
-	// Criteria are ordered low-to-high levels; SystemOne requires at least two.
+	// Criteria are ordered low-to-high levels; SystemOne requires two to 10.
 	Criteria []Entry `json:"criteria"`
 }
 
 func (ScoreQuestion) isQuestion() {}
 
 // MarshalJSON adds the fixed score discriminator. Call-time validation requires
-// at least two criteria; direct marshaling intentionally does not.
+// two to 10 criteria; direct marshaling intentionally does not.
 func (q ScoreQuestion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type         string  `json:"type"`
@@ -250,6 +250,44 @@ func (r *SystemOneResponse) RawJSON() string {
 		return ""
 	}
 	return string(r.raw)
+}
+
+// Noul returns the named noul answer. It reports whether the answer is absent
+// or has a different type.
+func (r *SystemOneResponse) Noul(name string) (NoulAnswer, error) {
+	return responseAnswerAs[NoulAnswer](r, name, "noul")
+}
+
+// Choice returns the named choice answer. It reports whether the answer is
+// absent or has a different type.
+func (r *SystemOneResponse) Choice(name string) (ChoiceAnswer, error) {
+	return responseAnswerAs[ChoiceAnswer](r, name, "choice")
+}
+
+// Score returns the named score answer. It reports whether the answer is absent
+// or has a different type.
+func (r *SystemOneResponse) Score(name string) (ScoreAnswer, error) {
+	return responseAnswerAs[ScoreAnswer](r, name, "score")
+}
+
+func responseAnswerAs[T Answer](response *SystemOneResponse, name, want string) (T, error) {
+	var zero T
+	if response == nil {
+		return zero, sdkError("cannot read an answer from a nil SystemOne response", nil)
+	}
+	answer, ok := response.Answers[name]
+	if !ok {
+		return zero, sdkError(fmt.Sprintf("answer %q is not in the response", name), nil)
+	}
+	typed, ok := answer.(T)
+	if !ok {
+		got := answerKind(answer)
+		if got == "" {
+			got = fmt.Sprintf("%T", answer)
+		}
+		return zero, sdkError(fmt.Sprintf("answer %q: want a %s answer, got %s", name, want, got), nil)
+	}
+	return typed, nil
 }
 
 // Nouls returns a new map containing noul answer values. Nested decoded values

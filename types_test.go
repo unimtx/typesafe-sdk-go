@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +77,43 @@ func TestDecodeAnswersAndRawJSON(t *testing.T) {
 	delete(copyMap, "c")
 	if _, ok := response.Answers["c"]; !ok {
 		t.Fatal("typed accessor exposed original map")
+	}
+}
+
+func TestSystemOneResponseAnswerAccessors(t *testing.T) {
+	response := &SystemOneResponse{Answers: map[string]Answer{
+		"n": NoulAnswer{Noul: 0.75},
+		"c": ChoiceAnswer{Choice: "a"},
+		"s": ScoreAnswer{Score: 1.25},
+	}}
+
+	noul, err := response.Noul("n")
+	if err != nil || noul.Noul != 0.75 {
+		t.Fatalf("Noul() = %+v, %v", noul, err)
+	}
+	choice, err := response.Choice("c")
+	if err != nil || choice.Choice != "a" {
+		t.Fatalf("Choice() = %+v, %v", choice, err)
+	}
+	if allocations := testing.AllocsPerRun(100, func() {
+		_, _ = response.Choice("c")
+	}); allocations != 0 {
+		t.Fatalf("Choice() allocations = %v, want 0", allocations)
+	}
+	score, err := response.Score("s")
+	if err != nil || score.Score != 1.25 {
+		t.Fatalf("Score() = %+v, %v", score, err)
+	}
+
+	if _, err := response.Choice("missing"); !errors.Is(err, ErrTypeSafe) || !strings.Contains(err.Error(), "not in the response") {
+		t.Fatalf("missing Choice() error = %v", err)
+	}
+	if _, err := response.Choice("n"); !errors.Is(err, ErrTypeSafe) || !strings.Contains(err.Error(), `want a choice answer, got noul`) {
+		t.Fatalf("mismatched Choice() error = %v", err)
+	}
+	var nilResponse *SystemOneResponse
+	if _, err := nilResponse.Noul("n"); !errors.Is(err, ErrTypeSafe) {
+		t.Fatalf("nil response Noul() error = %v", err)
 	}
 }
 

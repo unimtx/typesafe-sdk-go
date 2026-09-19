@@ -11,6 +11,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,11 @@ const (
 	envBaseURL      = "TYPESAFE_BASE_URL"
 	envDefaultModel = "TYPESAFE_DEFAULT_MODEL"
 	envLogLevel     = "TYPESAFE_LOG_LEVEL"
+
+	minChoiceCriteria = 1
+	maxChoiceCriteria = 255
+	minScoreCriteria  = 2
+	maxScoreCriteria  = 10
 )
 
 // Client is an immutable, concurrency-safe TypeSafe API client when injected
@@ -297,7 +303,16 @@ func validateSystemOnePayload(body []byte, original Questions) error {
 	if len(original) == 0 {
 		return fmt.Errorf("at least one question is required")
 	}
-	for id, question := range original {
+	ids := make([]string, 0, len(original))
+	for id := range original {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		if id == "" {
+			return fmt.Errorf("question name must not be empty")
+		}
+		question := original[id]
 		if question == nil {
 			return fmt.Errorf("question %q is nil", id)
 		}
@@ -317,16 +332,30 @@ func validateSystemOnePayload(body []byte, original Questions) error {
 	if trimmed == "" || (trimmed[0] != '"' && trimmed[0] != '{' && trimmed[0] != '[') {
 		return fmt.Errorf("state must encode as a string, object, or array")
 	}
-	for id, raw := range payload.Questions {
+	for _, id := range ids {
+		raw := payload.Questions[id]
 		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &fields); err != nil {
+		if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 			return fmt.Errorf("question %q must encode as an object", id)
 		}
 		var kind string
 		if typeRaw, ok := fields["type"]; !ok || json.Unmarshal(typeRaw, &kind) != nil || kind == "" {
 			return fmt.Errorf("question %q has a missing, invalid, or empty type", id)
 		}
-		if kind == "score" {
+		switch kind {
+		case "choice":
+			criteria, ok := fields["criteria"]
+			if !ok {
+				return fmt.Errorf("choice question %q has no criteria", id)
+			}
+			var options map[string]json.RawMessage
+			if err := json.Unmarshal(criteria, &options); err != nil || options == nil {
+				return fmt.Errorf("choice question %q criteria must be an object", id)
+			}
+			if len(options) < minChoiceCriteria || len(options) > maxChoiceCriteria {
+				return fmt.Errorf("choice question %q has %d criteria; between %d and %d choices are required", id, len(options), minChoiceCriteria, maxChoiceCriteria)
+			}
+		case "score":
 			criteria, ok := fields["criteria"]
 			if !ok {
 				return fmt.Errorf("score question %q has no criteria", id)
@@ -335,12 +364,33 @@ func validateSystemOnePayload(body []byte, original Questions) error {
 			if err := json.Unmarshal(criteria, &levels); err != nil {
 				return fmt.Errorf("score question %q criteria must be an array", id)
 			}
-			if len(levels) < 2 {
-				return fmt.Errorf("score question %q has %d criteria; at least two scores are required", id, len(levels))
+			if len(levels) < minScoreCriteria || len(levels) > maxScoreCriteria {
+				return fmt.Errorf("score question %q has %d criteria; between %d and %d scores are required", id, len(levels), minScoreCriteria, maxScoreCriteria)
+			}
+		case "noul":
+			if !meaningfulJSON(fields["instructions"]) && !meaningfulNoulCriteria(fields["criteria"]) {
+				return fmt.Errorf("noul question %q has neither instructions nor criteria", id)
 			}
 		}
 	}
 	return nil
+}
+
+func meaningfulNoulCriteria(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || trimmed[0] != '{' {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return false
+	}
+	return meaningfulJSON(fields["true"]) || meaningfulJSON(fields["false"])
+}
+
+func meaningfulJSON(raw json.RawMessage) bool {
+	trimmed := strings.TrimSpace(string(raw))
+	return trimmed != "" && trimmed != "null"
 }
 
 func runtimeHeader() string {

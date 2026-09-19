@@ -89,9 +89,12 @@ typesafe.ScoreQuestion
 typesafe.ScoreQuestion.MarshalJSON
 typesafe.SystemOneRequest
 typesafe.SystemOneResponse
+typesafe.SystemOneResponse.Choice
 typesafe.SystemOneResponse.Choices
+typesafe.SystemOneResponse.Noul
 typesafe.SystemOneResponse.Nouls
 typesafe.SystemOneResponse.RawJSON
+typesafe.SystemOneResponse.Score
 typesafe.SystemOneResponse.Scores
 typesafe.TimeoutError
 typesafe.TimeoutError.Error
