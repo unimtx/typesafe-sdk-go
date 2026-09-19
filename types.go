@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 )
 
 // Entry is a JSON-compatible state, instruction, or description value.
@@ -302,86 +304,355 @@ type ModelCard struct {
 	ReleaseDate string `json:"release_date"`
 }
 
-func decodeSystemOne(data []byte, requestID string) (*SystemOneResponse, error) {
-	var envelope struct {
-		Model   string                     `json:"model"`
-		Answers map[string]json.RawMessage `json:"answers"`
-		Usage   Usage                      `json:"usage"`
+type responseFieldError struct {
+	path  string
+	cause error
+}
+
+func (e *responseFieldError) Error() string { return e.cause.Error() }
+func (e *responseFieldError) Unwrap() error { return e.cause }
+
+func invalidResponseField(path, format string, args ...any) error {
+	return &responseFieldError{path: path, cause: fmt.Errorf(format, args...)}
+}
+
+func responseObject(raw []byte, path string) (map[string]json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, invalidResponseField(path, "expected a JSON object")
 	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &fields); err != nil {
+		return nil, &responseFieldError{path: path, cause: err}
+	}
+	return fields, nil
+}
+
+func requiredResponseField(fields map[string]json.RawMessage, name, path string) (json.RawMessage, error) {
+	raw, ok := fields[name]
+	if !ok {
+		return nil, invalidResponseField(path, "required field is missing")
+	}
+	return raw, nil
+}
+
+func decodeRequiredResponseField(raw json.RawMessage, destination any, path string) error {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return invalidResponseField(path, "required field is null")
+	}
+	if err := json.Unmarshal(raw, destination); err != nil {
+		return &responseFieldError{path: path, cause: err}
+	}
+	return nil
+}
+
+func responsePointer(base, token string) string {
+	token = strings.ReplaceAll(strings.ReplaceAll(token, "~", "~0"), "/", "~1")
+	return base + "/" + token
+}
+
+func decodeSystemOne(data []byte, requestID string) (*SystemOneResponse, error) {
+	root, err := responseObject(data, "$")
+	if err != nil {
 		return nil, err
 	}
-	answers := make(map[string]Answer, len(envelope.Answers))
-	for id, raw := range envelope.Answers {
-		answer, err := decodeAnswer(raw)
+	modelJSON, err := requiredResponseField(root, "model", "/model")
+	if err != nil {
+		return nil, err
+	}
+	var model string
+	if err := decodeRequiredResponseField(modelJSON, &model, "/model"); err != nil {
+		return nil, err
+	}
+	if model == "" {
+		return nil, invalidResponseField("/model", "must not be empty")
+	}
+
+	answersJSON, err := requiredResponseField(root, "answers", "/answers")
+	if err != nil {
+		return nil, err
+	}
+	answerFields, err := responseObject(answersJSON, "/answers")
+	if err != nil {
+		return nil, err
+	}
+	answerIDs := make([]string, 0, len(answerFields))
+	for id := range answerFields {
+		answerIDs = append(answerIDs, id)
+	}
+	sort.Strings(answerIDs)
+	answers := make(map[string]Answer, len(answerFields))
+	for _, id := range answerIDs {
+		answer, err := decodeAnswerAt(answerFields[id], responsePointer("/answers", id))
 		if err != nil {
-			return nil, fmt.Errorf("answer %q: %w", id, err)
+			return nil, err
 		}
 		answers[id] = answer
 	}
-	return &SystemOneResponse{Model: envelope.Model, Answers: answers, Usage: envelope.Usage,
+
+	usageJSON, err := requiredResponseField(root, "usage", "/usage")
+	if err != nil {
+		return nil, err
+	}
+	usageFields, err := responseObject(usageJSON, "/usage")
+	if err != nil {
+		return nil, err
+	}
+	usage, err := decodeUsage(usageFields)
+	if err != nil {
+		return nil, err
+	}
+	return &SystemOneResponse{Model: model, Answers: answers, Usage: usage,
 		RequestID: requestID, raw: bytes.Clone(data)}, nil
 }
 
 func decodeAnswer(raw json.RawMessage) (Answer, error) {
-	var discriminator struct {
-		Type json.RawMessage `json:"type"`
+	return decodeAnswerAt(raw, "$")
+}
+
+func decodeAnswerAt(raw json.RawMessage, path string) (Answer, error) {
+	fields, err := responseObject(raw, path)
+	if err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(raw, &discriminator); err != nil {
+	typePath := responsePointer(path, "type")
+	typeJSON, err := requiredResponseField(fields, "type", typePath)
+	if err != nil {
 		return nil, err
 	}
 	var kind string
-	if len(discriminator.Type) == 0 || json.Unmarshal(discriminator.Type, &kind) != nil || kind == "" {
-		return nil, fmt.Errorf("answer has a missing, invalid, or empty type")
+	if err := decodeRequiredResponseField(typeJSON, &kind, typePath); err != nil {
+		return nil, err
+	}
+	if kind == "" {
+		return nil, invalidResponseField(typePath, "must not be empty")
 	}
 	owned := bytes.Clone(raw)
 	switch kind {
 	case "noul":
-		var wire struct {
-			Noul float64 `json:"noul"`
-		}
-		if err := json.Unmarshal(raw, &wire); err != nil {
+		noulPath := responsePointer(path, "noul")
+		noulJSON, err := requiredResponseField(fields, "noul", noulPath)
+		if err != nil {
 			return nil, err
 		}
-		return NoulAnswer{Noul: wire.Noul, raw: owned}, nil
+		var noul float64
+		if err := decodeRequiredResponseField(noulJSON, &noul, noulPath); err != nil {
+			return nil, err
+		}
+		return NoulAnswer{Noul: noul, raw: owned}, nil
 	case "choice":
-		var wire struct {
-			Choice        string             `json:"choice"`
-			Confidence    float64            `json:"confidence"`
-			Probabilities map[string]float64 `json:"probabilities"`
+		var answer ChoiceAnswer
+		for _, field := range []struct {
+			name        string
+			destination any
+		}{
+			{"choice", &answer.Choice},
+			{"confidence", &answer.Confidence},
+			{"probabilities", &answer.Probabilities},
+		} {
+			fieldPath := responsePointer(path, field.name)
+			fieldJSON, err := requiredResponseField(fields, field.name, fieldPath)
+			if err != nil {
+				return nil, err
+			}
+			if err := decodeRequiredResponseField(fieldJSON, field.destination, fieldPath); err != nil {
+				return nil, err
+			}
 		}
-		if err := json.Unmarshal(raw, &wire); err != nil {
-			return nil, err
+		if answer.Probabilities == nil {
+			return nil, invalidResponseField(responsePointer(path, "probabilities"), "expected a JSON object")
 		}
-		return ChoiceAnswer{Choice: wire.Choice, Confidence: wire.Confidence, Probabilities: wire.Probabilities, raw: owned}, nil
+		answer.raw = owned
+		return answer, nil
 	case "score":
-		var wire struct {
-			Score         float64            `json:"score"`
-			Confidence    float64            `json:"confidence"`
-			Legend        map[string]Entry   `json:"legend"`
-			Probabilities map[string]float64 `json:"probabilities"`
+		var score float64
+		var confidence float64
+		var wireLegend map[string]Entry
+		var wireProbabilities map[string]float64
+		for _, field := range []struct {
+			name        string
+			destination any
+		}{
+			{"score", &score},
+			{"confidence", &confidence},
+			{"legend", &wireLegend},
+			{"probabilities", &wireProbabilities},
+		} {
+			fieldPath := responsePointer(path, field.name)
+			fieldJSON, err := requiredResponseField(fields, field.name, fieldPath)
+			if err != nil {
+				return nil, err
+			}
+			if err := decodeRequiredResponseField(fieldJSON, field.destination, fieldPath); err != nil {
+				return nil, err
+			}
 		}
-		if err := json.Unmarshal(raw, &wire); err != nil {
-			return nil, err
+		legendPath := responsePointer(path, "legend")
+		if wireLegend == nil {
+			return nil, invalidResponseField(legendPath, "expected a JSON object")
 		}
-		legend := make(map[int]Entry, len(wire.Legend))
-		probabilities := make(map[int]float64, len(wire.Probabilities))
-		for key, value := range wire.Legend {
+		probabilitiesPath := responsePointer(path, "probabilities")
+		if wireProbabilities == nil {
+			return nil, invalidResponseField(probabilitiesPath, "expected a JSON object")
+		}
+		legend := make(map[int]Entry, len(wireLegend))
+		probabilities := make(map[int]float64, len(wireProbabilities))
+		for key, value := range wireLegend {
 			n, err := strconv.Atoi(key)
 			if err != nil {
-				return nil, fmt.Errorf("legend key %q is not an integer", key)
+				return nil, invalidResponseField(responsePointer(legendPath, key), "key is not an integer")
 			}
 			legend[n] = value
 		}
-		for key, value := range wire.Probabilities {
+		for key, value := range wireProbabilities {
 			n, err := strconv.Atoi(key)
 			if err != nil {
-				return nil, fmt.Errorf("probability key %q is not an integer", key)
+				return nil, invalidResponseField(responsePointer(probabilitiesPath, key), "key is not an integer")
 			}
 			probabilities[n] = value
 		}
-		return ScoreAnswer{Score: wire.Score, Confidence: wire.Confidence, Legend: legend, Probabilities: probabilities, raw: owned}, nil
+		return ScoreAnswer{Score: score, Confidence: confidence, Legend: legend, Probabilities: probabilities, raw: owned}, nil
 	default:
 		return UnknownAnswer{Type: kind, raw: owned}, nil
+	}
+}
+
+func decodeUsage(fields map[string]json.RawMessage) (Usage, error) {
+	var usage Usage
+	for _, field := range []struct {
+		name        string
+		destination **int
+	}{
+		{"input_tokens", &usage.InputTokens},
+		{"output_tokens", &usage.OutputTokens},
+	} {
+		raw, ok := fields[field.name]
+		if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			continue
+		}
+		var value int
+		fieldPath := responsePointer("/usage", field.name)
+		if err := decodeRequiredResponseField(raw, &value, fieldPath); err != nil {
+			return Usage{}, err
+		}
+		*field.destination = &value
+	}
+	return usage, nil
+}
+
+func decodeModels(data []byte) ([]ModelCard, error) {
+	root, err := responseObject(data, "$")
+	if err != nil {
+		return nil, err
+	}
+	modelsJSON, err := requiredResponseField(root, "models", "/models")
+	if err != nil {
+		return nil, err
+	}
+	trimmed := bytes.TrimSpace(modelsJSON)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil, invalidResponseField("/models", "expected a JSON array")
+	}
+	var rawModels []json.RawMessage
+	if err := json.Unmarshal(trimmed, &rawModels); err != nil {
+		return nil, &responseFieldError{path: "/models", cause: err}
+	}
+	models := make([]ModelCard, len(rawModels))
+	for i, raw := range rawModels {
+		modelPath := responsePointer("/models", strconv.Itoa(i))
+		fields, err := responseObject(raw, modelPath)
+		if err != nil {
+			return nil, err
+		}
+		for _, field := range []struct {
+			name        string
+			destination *string
+		}{
+			{"name", &models[i].Name},
+			{"description", &models[i].Description},
+			{"release_date", &models[i].ReleaseDate},
+		} {
+			fieldPath := responsePointer(modelPath, field.name)
+			fieldJSON, err := requiredResponseField(fields, field.name, fieldPath)
+			if err != nil {
+				return nil, err
+			}
+			if err := decodeRequiredResponseField(fieldJSON, field.destination, fieldPath); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return models, nil
+}
+
+func validateAnswerKinds(answers map[string]Answer, questions Questions) error {
+	ids := make([]string, 0, len(questions))
+	for id := range questions {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		answer, ok := answers[id]
+		answerPath := responsePointer("/answers", id)
+		if !ok {
+			return invalidResponseField(answerPath, "required answer is missing")
+		}
+		want, err := questionKind(questions[id])
+		if err != nil {
+			return invalidResponseField(responsePointer(answerPath, "type"), "cannot determine request question type: %v", err)
+		}
+		got := answerKind(answer)
+		if got != want {
+			return invalidResponseField(responsePointer(answerPath, "type"), "answer type %q does not match question type %q", got, want)
+		}
+	}
+	return nil
+}
+
+func questionKind(question Question) (string, error) {
+	switch value := question.(type) {
+	case NoulQuestion, *NoulQuestion:
+		return "noul", nil
+	case ChoiceQuestion, *ChoiceQuestion:
+		return "choice", nil
+	case ScoreQuestion, *ScoreQuestion:
+		return "score", nil
+	case RawQuestion:
+		return rawQuestionKind(value.JSON)
+	case *RawQuestion:
+		return rawQuestionKind(value.JSON)
+	default:
+		return "", fmt.Errorf("unsupported question type %T", question)
+	}
+}
+
+func rawQuestionKind(raw json.RawMessage) (string, error) {
+	fields, err := responseObject(raw, "$")
+	if err != nil {
+		return "", err
+	}
+	typeJSON, err := requiredResponseField(fields, "type", "/type")
+	if err != nil {
+		return "", err
+	}
+	var kind string
+	if err := decodeRequiredResponseField(typeJSON, &kind, "/type"); err != nil {
+		return "", err
+	}
+	return kind, nil
+}
+
+func answerKind(answer Answer) string {
+	switch value := answer.(type) {
+	case NoulAnswer:
+		return "noul"
+	case ChoiceAnswer:
+		return "choice"
+	case ScoreAnswer:
+		return "score"
+	case UnknownAnswer:
+		return value.Type
+	default:
+		return ""
 	}
 }

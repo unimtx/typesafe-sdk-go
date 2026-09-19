@@ -2,6 +2,7 @@ package typesafe
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -75,6 +76,90 @@ func TestDecodeAnswersAndRawJSON(t *testing.T) {
 	delete(copyMap, "c")
 	if _, ok := response.Answers["c"]; !ok {
 		t.Fatal("typed accessor exposed original map")
+	}
+}
+
+func TestSystemOneResponseValidationPaths(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		path string
+	}{
+		{"root type", `[]`, "$"},
+		{"missing model", `{"answers":{},"usage":{}}`, "/model"},
+		{"null model", `{"model":null,"answers":{},"usage":{}}`, "/model"},
+		{"empty model", `{"model":"","answers":{},"usage":{}}`, "/model"},
+		{"null answers", `{"model":"m","answers":null,"usage":{}}`, "/answers"},
+		{"missing usage", `{"model":"m","answers":{}}`, "/usage"},
+		{"invalid usage count", `{"model":"m","answers":{},"usage":{"input_tokens":"one"}}`, "/usage/input_tokens"},
+		{"missing answer type", `{"model":"m","answers":{"a/b":{"noul":1}},"usage":{}}`, "/answers/a~1b/type"},
+		{"missing noul", `{"model":"m","answers":{"q":{"type":"noul"}},"usage":{}}`, "/answers/q/noul"},
+		{"missing choice probabilities", `{"model":"m","answers":{"q":{"type":"choice","choice":"a","confidence":1}},"usage":{}}`, "/answers/q/probabilities"},
+		{"null score legend", `{"model":"m","answers":{"q":{"type":"score","score":1,"confidence":1,"legend":null,"probabilities":{}}},"usage":{}}`, "/answers/q/legend"},
+		{"noninteger score key", `{"model":"m","answers":{"q":{"type":"score","score":1,"confidence":1,"legend":{"low":"x"},"probabilities":{}}},"usage":{}}`, "/answers/q/legend/low"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := decodeSystemOne([]byte(test.body), "request")
+			var fieldErr *responseFieldError
+			if !errors.As(err, &fieldErr) || fieldErr.path != test.path {
+				t.Fatalf("error=%v path=%q, want %q", err, fieldErrPath(err), test.path)
+			}
+		})
+	}
+}
+
+func TestModelsResponseValidationPaths(t *testing.T) {
+	tests := []struct {
+		body string
+		path string
+	}{
+		{`null`, "$"},
+		{`{}`, "/models"},
+		{`{"models":null}`, "/models"},
+		{`{"models":[null]}`, "/models/0"},
+		{`{"models":[{"name":"m","description":"d"}]}`, "/models/0/release_date"},
+		{`{"models":[{"name":1,"description":"d","release_date":"2026"}]}`, "/models/0/name"},
+	}
+	for _, test := range tests {
+		_, err := decodeModels([]byte(test.body))
+		var fieldErr *responseFieldError
+		if !errors.As(err, &fieldErr) || fieldErr.path != test.path {
+			t.Errorf("body=%s error=%v path=%q, want %q", test.body, err, fieldErrPath(err), test.path)
+		}
+	}
+}
+
+func fieldErrPath(err error) string {
+	var fieldErr *responseFieldError
+	if errors.As(err, &fieldErr) {
+		return fieldErr.path
+	}
+	return ""
+}
+
+func TestValidateAnswerKinds(t *testing.T) {
+	tests := []struct {
+		name      string
+		answers   map[string]Answer
+		questions Questions
+		path      string
+	}{
+		{"missing", map[string]Answer{}, Questions{"q": Noul("?")}, "/answers/q"},
+		{"mismatch", map[string]Answer{"q": NoulAnswer{}}, Questions{"q": Choice("?", ChoiceCriteria{"a": nil})}, "/answers/q/type"},
+		{"escaped ID", map[string]Answer{}, Questions{"a/b": Noul("?")}, "/answers/a~1b"},
+	}
+	for _, test := range tests {
+		err := validateAnswerKinds(test.answers, test.questions)
+		if got := fieldErrPath(err); got != test.path {
+			t.Errorf("%s: error=%v path=%q, want %q", test.name, err, got, test.path)
+		}
+	}
+	if err := validateAnswerKinds(
+		map[string]Answer{"future": UnknownAnswer{Type: "future"}},
+		Questions{"future": RawQuestion{JSON: json.RawMessage(`{"type":"future"}`)}},
+	); err != nil {
+		t.Fatalf("matching future types: %v", err)
 	}
 }
 

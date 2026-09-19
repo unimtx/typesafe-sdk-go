@@ -1,4 +1,4 @@
-# Public package-level declarations and exported methods for v0.1.0.
+# Public package-level declarations expected after v0.1.0.
 option.ClientOption
 option.CommonOption
 option.DefaultRetryPolicy
@@ -52,6 +52,7 @@ typesafe.ErrInternalServer
 typesafe.ErrNotFound
 typesafe.ErrPermissionDenied
 typesafe.ErrRateLimit
+typesafe.ErrResponseValidation
 typesafe.ErrTimeout
 typesafe.ErrTypeSafe
 typesafe.ErrUnprocessableEntity
@@ -77,6 +78,10 @@ typesafe.Question
 typesafe.Questions
 typesafe.RawQuestion
 typesafe.RawQuestion.MarshalJSON
+typesafe.ResponseValidationError
+typesafe.ResponseValidationError.Error
+typesafe.ResponseValidationError.Is
+typesafe.ResponseValidationError.Unwrap
 typesafe.Score
 typesafe.ScoreAnswer
 typesafe.ScoreAnswer.RawJSON

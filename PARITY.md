@@ -64,10 +64,10 @@ nested Entry data retain ordinary Go sharing semantics.
 | Usage | `*int` token fields preserve absent/null versus zero. HTTP docs do not mark the individual counts required; Python permits None. JS's required numeric static types do not enforce runtime validation. | JS `src/types.ts:126–142`, `src/client.ts:342–345`; Python `_core/response_types.py:65–73` |
 | Answer decoding | Concrete Go variants with int score-map keys; unknown string types retain their raw JSON as UnknownAnswer. Missing/invalid discriminators and incompatible known field types error. Python drops unknown answers; JS keeps unvalidated parsed data. | JS `src/types.ts:72–142`, `src/client.ts:342–345`; Python `_core/response_types.py:79–96` |
 | Score legends | `map[int]Entry` admits structured/null descriptions. Do not narrow to strings or use integer Score values; Score is a fractional expectation. | JS `src/types.ts:98–114`; official structured-entry guide |
-| Success parsing | Parse irrespective of Content-Type but reject malformed/incompatible typed success bodies. Do not return a zero-valued success for text. No added full schema validator. Decode errors are not retried. | JS `src/client.ts:342–345,472–489` uses an unchecked cast |
+| Success parsing | Parse irrespective of Content-Type and return ResponseValidationError for malformed/incompatible typed success bodies. Require documented top-level and known-variant fields plus request/answer discriminator agreement; retain unknown fields and answer variants. Decode errors are not retried. | JS `src/client.ts:342–345,472–489` uses an unchecked cast; Python `_core/errors.py:176–196` has a dedicated validation error |
 | Model listing | Return `[]ModelCard` after validating/unwrapping `{models:[...]}`, matching JS. No public ListModelsResponse even though Python has one. Raw envelope access uses WithResponseInto. | JS `src/resources/models.ts:14–28`; Python `_core/response_types.py:142–165` |
 | Raw HTTP access | WithResponseInto provides a sanitized buffered snapshot alongside typed decoding, including on errors. Body ownership differs from JS; it is an independent memory reader. There is no separate raw-only Promise path that bypasses typed decoding. | JS `src/api-promise.ts:36–53` |
-| Error form | Sentinels and errors.As replace classes. APIError adds method/path/request-ID context and dump helpers; RetryAfter preserves rate-limit metadata, TimeoutError.Duration preserves timeout metadata. | JS `src/errors.ts:15–122` |
+| Error form | Sentinels and errors.As replace classes. APIError adds method/path/request-ID context and dump helpers; ResponseValidationError adds field-path/cause/response context for incompatible 2xx bodies; RetryAfter preserves rate-limit metadata, TimeoutError.Duration preserves timeout metadata. | JS `src/errors.ts:15–122`; Python `_core/errors.py:176–196` |
 | Logging | `slog` with a discard default instead of console. SDK verbosity and the caller's handler filtering both apply; setting debug cannot enable a handler that discards debug events. | JS `src/logging.ts:20–47` |
 | Redaction | Fully redact known credential headers instead of retaining JS's last four characters. Sanitize stored request/response snapshots, not the actual HTTP request. Raw bodies and arbitrary caller fields are not generally redacted. | JS `src/logging.ts:53–79` |
 | Identity headers | Identify this independent port as `typesafe-sdk-go/<Version>` and the actual Go runtime/platform. Protect the same header names as JS. | JS `src/client.ts:352–367`, `src/runtime.ts:20–31` |
@@ -91,8 +91,9 @@ without evidence. Record newly introduced exports in the capability mapping.
   and answer kinds. RawJSON is an immutable received snapshot, not a live view.
 - Nouls, Choices, Scores: grouped typed maps inspired by Python
   `_core/response_types.py:112–125`; direct type assertions also work.
-- ErrTypeSafe and class-specific sentinels, Error, APIError, TimeoutError,
-  APIError.RetryAfter, and error dump methods: Go error handling and diagnostics.
+- ErrTypeSafe and class-specific sentinels, Error, APIError,
+  ResponseValidationError, TimeoutError, APIError.RetryAfter, and error dump
+  methods: Go error handling and diagnostics.
 - Client/String/GoString/LogValue safety methods and read-only accessors;
   WithHTTPClient, WithLogger, WithResponseInto adapt fetch/logger/response access.
 - DefaultBaseURL, DefaultModel, DefaultRetryPolicy, and named LogLevel constants

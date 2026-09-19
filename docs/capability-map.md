@@ -17,6 +17,7 @@ the checked declaration baseline is `internal/tools/surfacecheck/surface.txt`.
 | Future question/answer forms | `RawQuestion`, `UnknownAnswer` | `TestRawQuestionPreservesMemberOrder`, `TestDecodeAnswersAndRawJSON` |
 | Raw response and original JSON | `option.WithResponseInto`, `SystemOneResponse.RawJSON`, `Answer.RawJSON` | snapshot, decode-error, and raw JSON tests |
 | Status/transport errors | sentinels, `Error`, `APIError`, `TimeoutError` | `TestAPIErrorCategoriesBodyAndDumps`, timeout/cancellation tests |
+| Successful-response validation | `ErrResponseValidation`, `ResponseValidationError` | `TestSystemOneResponseValidationPaths`, `TestModelsResponseValidationPaths`, `TestValidateAnswerKinds`, `TestResponseValidationErrorDetailsAndSnapshots` |
 | Retry, timeout, cancellation | `RetryPolicy`, common options, request contexts | retry and reliability tests |
 
 Live-service acceptance is tracked separately in

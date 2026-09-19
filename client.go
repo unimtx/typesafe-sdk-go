@@ -228,7 +228,10 @@ func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest, opts ...op
 	requestID := headerValue(response.Header, "x-typesafe-request-id")
 	result, err := decodeSystemOne(data, requestID)
 	if err != nil {
-		return nil, sdkError("decode POST /v1/systemone response: "+err.Error(), err)
+		return nil, newResponseValidationError(http.MethodPost, "/v1/systemone", response, data, err)
+	}
+	if err := validateAnswerKinds(result.Answers, req.Questions); err != nil {
+		return nil, newResponseValidationError(http.MethodPost, "/v1/systemone", response, data, err)
 	}
 	return result, nil
 }
@@ -245,23 +248,13 @@ func (s ModelService) List(ctx context.Context, opts ...option.RequestOption) ([
 	if err != nil {
 		return nil, err
 	}
-	data, _, err := s.client.execute(ctx, http.MethodGet, "/v1/models", nil, resolved)
+	data, response, err := s.client.execute(ctx, http.MethodGet, "/v1/models", nil, resolved)
 	if err != nil {
 		return nil, err
 	}
-	var envelope struct {
-		Models json.RawMessage `json:"models"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return nil, sdkError("decode GET /v1/models response: "+err.Error(), err)
-	}
-	modelsJSON := strings.TrimSpace(string(envelope.Models))
-	if modelsJSON == "" || modelsJSON == "null" || modelsJSON[0] != '[' {
-		return nil, sdkError("unexpected response shape from GET /v1/models; expected { models: [...] }", nil)
-	}
-	var models []ModelCard
-	if err := json.Unmarshal(envelope.Models, &models); err != nil {
-		return nil, sdkError("decode GET /v1/models response: "+err.Error(), err)
+	models, err := decodeModels(data)
+	if err != nil {
+		return nil, newResponseValidationError(http.MethodGet, "/v1/models", response, data, err)
 	}
 	return models, nil
 }

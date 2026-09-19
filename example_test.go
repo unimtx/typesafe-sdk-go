@@ -141,6 +141,10 @@ func ExampleAPIError() {
 	if errors.Is(err, typesafe.ErrRateLimit) {
 		log.Print("retry later")
 	}
+	var responseErr *typesafe.ResponseValidationError
+	if errors.As(err, &responseErr) {
+		fmt.Println(responseErr.FieldPath, responseErr.RequestID)
+	}
 	var apiErr *typesafe.APIError
 	if errors.As(err, &apiErr) {
 		fmt.Println(apiErr.StatusCode, apiErr.RequestID, apiErr.RetryAfter)

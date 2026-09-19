@@ -6,6 +6,9 @@
   and a mixed Choice, Score, and Noul SystemOne request.
 - Add a weekly stable-release monitor for the pinned TypeSafe JavaScript and
   Python SDKs, with a deduplicated drift issue and no automatic pin changes.
+- Add `ResponseValidationError` and `ErrResponseValidation` for incompatible 2xx
+  response bodies, with JSON field paths, request IDs, causes, sanitized response
+  snapshots, and required-field/request-answer correlation checks.
 
 ## [0.1.0] - 2026-09-19
 

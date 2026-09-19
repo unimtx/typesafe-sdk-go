@@ -249,9 +249,12 @@ SDK errors work with the standard `errors` package:
 
 ```go
 var apiErr *typesafe.APIError
+var responseErr *typesafe.ResponseValidationError
 switch {
 case errors.Is(err, typesafe.ErrRateLimit):
 	log.Print("rate limited; try again later")
+case errors.As(err, &responseErr):
+	log.Printf("invalid response field %s (request %s)", responseErr.FieldPath, responseErr.RequestID)
 case errors.As(err, &apiErr):
 	log.Printf("HTTP %d (request %s)", apiErr.StatusCode, apiErr.RequestID)
 case err != nil:

@@ -164,8 +164,58 @@ func TestModelsListGETAndEnvelopeValidation(t *testing.T) {
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, `{"models":null}`) }))
 	defer bad.Close()
 	c, _ = NewClient(option.WithAPIKey("k"), option.WithBaseURL(bad.URL))
-	if _, err := c.Models.List(context.Background()); !errors.Is(err, ErrTypeSafe) {
+	if _, err := c.Models.List(context.Background()); !errors.Is(err, ErrResponseValidation) {
 		t.Fatalf("bad envelope: %v", err)
+	}
+}
+
+func TestResponseValidationErrorDetailsAndSnapshots(t *testing.T) {
+	clearTypeSafeEnv(t)
+	var calls atomic.Int32
+	body := `{"model":"m","answers":{"q":{"type":"choice","choice":"private-choice","confidence":1}},"usage":{}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("X-TypeSafe-Request-ID", "req_validation")
+		w.Header().Set("Set-Cookie", "private-cookie")
+		_, _ = io.WriteString(w, body)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(option.WithAPIKey("private-key"), option.WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw *http.Response
+	_, err = client.SystemOne(context.Background(), SystemOneRequest{
+		State: "state", Questions: Questions{"q": Choice("choose", ChoiceCriteria{"a": nil})},
+	}, option.WithResponseInto(&raw))
+	var validationErr *ResponseValidationError
+	if !errors.As(err, &validationErr) || !errors.Is(err, ErrResponseValidation) || !errors.Is(err, ErrTypeSafe) {
+		t.Fatalf("error categories: %T %v", err, err)
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		t.Fatalf("response validation error is also APIError: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("validation failure retried: calls=%d", calls.Load())
+	}
+	if validationErr.Method != http.MethodPost || validationErr.Path != "/v1/systemone" || validationErr.RequestID != "req_validation" || validationErr.FieldPath != "/answers/q/probabilities" || validationErr.Cause == nil {
+		t.Fatalf("validation error=%+v", validationErr)
+	}
+	if strings.Contains(validationErr.Error(), "private-choice") || strings.Contains(validationErr.Error(), "private-key") || strings.Contains(validationErr.Error(), "private-cookie") {
+		t.Fatalf("validation error exposed private data: %v", validationErr)
+	}
+	if validationErr.Response == nil || raw == nil || validationErr.Response == raw {
+		t.Fatal("missing or shared response snapshots")
+	}
+	if validationErr.Response.Header.Get("Set-Cookie") != "[REDACTED]" || validationErr.Response.Request.Header.Get("Authorization") != "[REDACTED]" {
+		t.Fatal("validation response snapshot was not redacted")
+	}
+	errorBody, _ := io.ReadAll(validationErr.Response.Body)
+	rawBody, _ := io.ReadAll(raw.Body)
+	if string(errorBody) != body || string(rawBody) != body {
+		t.Fatal("response snapshots do not independently retain the response body")
 	}
 }
 

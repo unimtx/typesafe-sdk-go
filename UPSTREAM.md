@@ -83,6 +83,7 @@ adding fixtures rather than assuming a live page never changes.
 - [Response types:65–73](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/src/typesafe_sdk/_core/response_types.py#L65-L73): unreported token counts use None.
 - [Response types:79–125](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/src/typesafe_sdk/_core/response_types.py#L79-L125): unknown answer handling and grouped answer accessors.
 - [Response types:142–165](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/src/typesafe_sdk/_core/response_types.py#L142-L165): model metadata and wrapped list response.
+- [Response validation error:176–196](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/src/typesafe_sdk/_core/errors.py#L176-L196): dedicated response-shape error with field-path and HTTP metadata.
 - [Question types:14–35](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/src/typesafe_sdk/_core/question_types.py#L14-L35): optional nullable instructions and noul criteria.
 - [Changelog](https://github.com/typesafe-ai/typesafe-sdk-python/blob/2ce5c65f13646cab6e6f782328194c9d85f3300a/docs/changelog.md): v0.7.0 scope relative to v0.6.0.
 

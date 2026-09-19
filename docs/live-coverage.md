@@ -28,4 +28,5 @@ response shapes at that time.
 
 | Date | SDK version | Result | Notes |
 |---|---|---|---|
+| 2026-09-19 | post-0.1.0 development tree | Passed | Required response fields and request/answer discriminator correlation enabled; Models.List and mixed primitive request passed. |
 | 2026-09-19 | 0.1.0 development tree | Passed | Models.List and one mixed Choice, Score, and Noul request; two HTTP requests with retries disabled. |

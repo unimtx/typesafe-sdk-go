@@ -34,13 +34,16 @@ var (
 	ErrTimeout = errors.New("typesafe request timeout")
 	// ErrUserAbort matches caller cancellation and caller deadline expiration.
 	ErrUserAbort = errors.New("typesafe request canceled by caller")
+	// ErrResponseValidation matches successful HTTP responses that do not satisfy
+	// the documented response shape.
+	ErrResponseValidation = errors.New("typesafe response validation failed")
 )
 
-// Error reports configuration, validation, encoding, or decoding failures.
+// Error reports configuration, request validation, or encoding failures.
 type Error struct {
 	// Message is the safe, human-readable failure description.
 	Message string
-	// Cause is the optional underlying encoding, decoding, or option error.
+	// Cause is the optional underlying encoding, validation, or option error.
 	Cause error
 }
 
@@ -64,6 +67,80 @@ func (e *Error) Unwrap() error {
 func (e *Error) Is(target error) bool { return target == ErrTypeSafe }
 
 func sdkError(message string, cause error) *Error { return &Error{Message: message, Cause: cause} }
+
+// ResponseValidationError reports a 2xx response that could not be decoded as
+// the documented result. FieldPath is "$" for the response root or an RFC 6901
+// JSON Pointer for a specific field. Response is a sanitized buffered snapshot.
+type ResponseValidationError struct {
+	// Method is the HTTP method used for the request.
+	Method string
+	// Path is the API endpoint path.
+	Path string
+	// RequestID is the x-typesafe-request-id header value, when present.
+	RequestID string
+	// FieldPath identifies the invalid response location.
+	FieldPath string
+	// Response is a sanitized response snapshot with an independent buffered body.
+	Response *http.Response
+	// Cause describes the incompatible JSON value or decoding failure.
+	Cause error
+}
+
+// Error returns a method/path/request-ID/field description without including
+// the response body.
+func (e *ResponseValidationError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	prefix := strings.TrimSpace(e.Method + " " + e.Path)
+	if prefix == "" {
+		prefix = "TypeSafe"
+	}
+	message := prefix + " response validation failed"
+	if e.RequestID != "" {
+		message += " (request " + e.RequestID + ")"
+	}
+	if e.FieldPath != "" {
+		message += " at " + e.FieldPath
+	}
+	if e.Cause != nil {
+		message += ": " + e.Cause.Error()
+	}
+	return message
+}
+
+// Unwrap returns the underlying decoding or shape error.
+func (e *ResponseValidationError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+// Is reports response-validation and SDK error category membership.
+func (e *ResponseValidationError) Is(target error) bool {
+	return target == ErrResponseValidation || target == ErrTypeSafe
+}
+
+func newResponseValidationError(method, path string, response *http.Response, data []byte, err error) *ResponseValidationError {
+	fieldPath := "$"
+	cause := err
+	var fieldErr *responseFieldError
+	if errors.As(err, &fieldErr) {
+		fieldPath = fieldErr.path
+		cause = fieldErr.cause
+	}
+	requestID := ""
+	var snapshot *http.Response
+	if response != nil {
+		requestID = headerValue(response.Header, "x-typesafe-request-id")
+		snapshot = snapshotResponse(response, data, response.Request)
+	}
+	return &ResponseValidationError{
+		Method: method, Path: path, RequestID: requestID, FieldPath: fieldPath,
+		Response: snapshot, Cause: cause,
+	}
+}
 
 // TimeoutError reports an SDK per-attempt timeout.
 type TimeoutError struct {

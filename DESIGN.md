@@ -413,10 +413,13 @@ func (ModelService) List(ctx context.Context, opts ...option.RequestOption) ([]M
   through WithResponseInto.
 - Parse JSON regardless of Content-Type. For non-2xx errors preserve parsed JSON
   or text (nil for an empty body). A typed Go success result cannot represent
-  arbitrary text: malformed/incompatible success bodies return `*Error` wrapping
-  the decode error, without retries. Do not add full response-schema validation;
-  standard missing-field zero values apply except for discriminator and models
-  envelope checks. This differs from JS's unchecked type assertion.
+  arbitrary text: malformed or incompatible 2xx bodies return
+  `*ResponseValidationError` without retries. Validate required top-level fields,
+  required fields of known answer/model variants, answer presence and discriminator
+  agreement with each request question, and integer score-map keys. Continue to
+  accept unknown fields and unknown answer variants; optional usage token counts
+  may be absent or null. This targeted validation differs from JS's unchecked
+  type assertion and does not introduce a generated full-schema validator.
 - WithResponseInto resets its destination to nil on entry, then receives the
   final HTTP response snapshot on success, HTTP error, or decode error. No final
   response means nil. The SDK reads and closes the network body within the
@@ -444,11 +447,24 @@ type APIError struct {
 func (e *APIError) Error() string
 func (e *APIError) DumpRequest(body bool) ([]byte, error)
 func (e *APIError) DumpResponse(body bool) ([]byte, error)
+
+type ResponseValidationError struct {
+    Method      string
+    Path        string
+    RequestID   string
+    FieldPath   string
+    Response    *http.Response
+    Cause       error
+}
 ```
 
-- `*Error` handles configuration, local validation, encoding, and decoding
-  failures; preserve underlying causes with Unwrap when present. Every error
-  created by the SDK matches `ErrTypeSafe`. Callers use `errors.Is` for categories
+- `*Error` handles configuration, local request validation, and encoding
+  failures; preserve underlying causes with Unwrap when present.
+  `*ResponseValidationError` handles incompatible 2xx response bodies and matches
+  both `ErrResponseValidation` and `ErrTypeSafe`. It exposes the method, endpoint
+  path, request ID, `$` or an RFC 6901 JSON Pointer field path, a sanitized
+  independently buffered response snapshot, and the underlying cause. Its error
+  string never includes the response body. Callers use `errors.Is` for categories
   and `errors.As` for details; do not require string matching.
 - All non-2xx HTTP errors use `*APIError`. Match the following sentinel mapping:
 
