@@ -290,8 +290,8 @@ func Noul(instructions Entry) NoulQuestion
   order or option-priority semantics are promised. Normalize nil criteria to an
   empty object in ChoiceQuestion.MarshalJSON without changing caller data; empty
   criteria also encode as {}. No separate ChoiceCriteria marshaler is needed.
-  Zero ChoiceQuestion remains encodable; encoding does not prove API acceptance.
-  No local choice-count check is added; service limits still apply.
+  Zero ChoiceQuestion remains directly encodable, but SystemOne rejects fewer
+  than one or more than 255 choices before network activity.
 - **Score:** Criteria stays []Entry. Array position defines the level, so never
   sort it or replace it with an integer-keyed map. Nil slices encode as null and
   non-nil empty slices as []; neither is a usable scale. Reject nil, empty, and
@@ -318,8 +318,9 @@ func Noul(instructions Entry) NoulQuestion
   present, and json.RawMessage("null") explicitly sends null. A typed-nil value
   inside Entry is not a nil interface and encodes as null when supported by its
   marshaler. Explicit null for the whole criteria object uses RawQuestion.
-  Noul(nil) explicitly sends null instructions, subject to the documented service
-  uncertainty in PARITY.md; do not advertise a parameterless Noul() call.
+  SystemOne requires either non-null instructions or at least one non-null true
+  or false description. Criteria-only Noul questions are accepted; Noul(nil)
+  without meaningful criteria is rejected locally.
 - **Ownership:** Choice shallow-copies the input map, preserving nil; Score copies
   levels into a new []Entry, preserving nil versus non-nil empty slices. Replacing
   caller map entries or slice elements later must not change the built question.
@@ -330,8 +331,9 @@ func Noul(instructions Entry) NoulQuestion
 
 - `RawQuestion` is `struct { JSON json.RawMessage }`. Its JSON must be a valid
   object with a nonempty string `type`; unknown types are forwarded. Known raw
-  score questions still undergo the list/minimum-length validation. Do not
-  normalize its object order or strip unknown fields.
+  Choice, Score, and Noul questions undergo the same criteria-count/content
+  validation as modeled questions. Do not normalize its object order or strip
+  unknown fields.
 - Use `encoding/json` order deliberately: maps sort string keys, structs follow
   field order, RawMessage preserves member order but may be compacted/escaped
   when embedded. **Do not promise byte-for-byte request passthrough.** Avoid
@@ -351,15 +353,15 @@ HTTP fields as reviewed typed fields rather than prebuilding an override system.
   for retries; do not re-run caller marshalers for validation or each attempt.
   Inspect serialized JSON without rebuilding Entry objects, so chosen member
   order and caller marshaler output remain intact.
-- Local checks cover nonempty Questions, score criteria as an array of at least
-  two levels (also for RawQuestion), invalid raw JSON, nil questions/options,
-  supported root State shape, and serialization errors.
+- Local checks cover nonempty Questions and nonempty question IDs; one to 255
+  Choice criteria; two to 10 Score criteria; meaningful Noul instructions or
+  criteria; invalid raw JSON; nil questions/options; supported root State shape;
+  and serialization errors. Known RawQuestion kinds receive the same checks.
   They return *Error before network activity. Use the serialized shape for
   custom marshalers and typed-nil State values rather than a Go type allowlist.
 - Do not add a full JSON-schema validator, model allowlists, or speculative
-  limits. Choice/Score service maxima and other server rules remain enforced by
-  the service. Add targeted client checks only for a documented contract and
-  clear usability benefit, recording intentional differences from JS.
+  limits. Add targeted client checks only for a documented contract and clear
+  usability benefit, recording intentional differences from JS.
 
 ### 3.5 Responses, models, and raw HTTP access
 
@@ -378,6 +380,10 @@ type Usage struct {
 }
 
 func (ModelService) List(ctx context.Context, opts ...option.RequestOption) ([]ModelCard, error)
+
+func (*SystemOneResponse) Noul(name string) (NoulAnswer, error)
+func (*SystemOneResponse) Choice(name string) (ChoiceAnswer, error)
+func (*SystemOneResponse) Score(name string) (ScoreAnswer, error)
 ```
 
 - Ordinary exported value structs, using custom decoding where needed for
@@ -402,8 +408,10 @@ func (ModelService) List(ctx context.Context, opts ...option.RequestOption) ([]M
 - `SystemOneResponse.RawJSON()` and each answer's `RawJSON()` return original
   received JSON, not a re-marshaling. Retain owned copies; return `""` for
   manually constructed values. Later field edits do not change RawJSON.
-- `Nouls()`, `Choices()`, and `Scores()` return fresh typed maps keyed by ID.
-  Use ordinary type assertions/type switches on Answers for single lookups.
+- `Noul(name)`, `Choice(name)`, and `Score(name)` perform allocation-free single
+  lookups and distinguish a missing answer from a different answer type.
+  `Nouls()`, `Choices()`, and `Scores()` return fresh typed maps keyed by ID.
+  Ordinary type assertions/type switches on Answers remain available.
   Returned answer values may share nested response maps; these are caller-owned.
 - Models uses **GET `/v1/models`**, decoding `{ "models": [...] }` and returning
   the inner list, matching JS. Missing/null/non-array `models` is an error.
@@ -597,9 +605,11 @@ resp, err := client.SystemOne(ctx, typesafe.SystemOneRequest{
 if err != nil {
     log.Fatal(err)
 }
-if tone, ok := resp.Choices()["tone"]; ok {
-    fmt.Println(tone.Choice, tone.Confidence)
+tone, err := resp.Choice("tone")
+if err != nil {
+    log.Fatal(err)
 }
+fmt.Println(tone.Choice, tone.Confidence)
 ```
 
 Use the complete keyed forms for described/structured criteria (these are usage

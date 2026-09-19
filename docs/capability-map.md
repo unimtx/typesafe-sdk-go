@@ -11,9 +11,9 @@ the checked declaration baseline is `internal/tools/surfacecheck/surface.txt`.
 |---|---|---|
 | `POST /v1/systemone` | `(*Client).SystemOne(context.Context, SystemOneRequest, ...option.RequestOption)` | `TestPrimitiveConformanceFixtures`, `TestSystemOneWireHeadersDecodeAndSnapshot` |
 | `GET /v1/models` | `(ModelService).List(context.Context, ...option.RequestOption)` | `TestModelsListGETAndEnvelopeValidation` |
-| Choice question/answer | `Choice`, `ChoiceQuestion`, `ChoiceCriteria`, `ChoiceAnswer` | C01–C03 fixtures |
-| Score question/answer | generic `Score`, `ScoreQuestion`, `ScoreAnswer` | S01–S04 fixtures and compilation cases |
-| Noul question/answer | `Noul`, `NoulQuestion`, `NoulCriteria`, `NoulAnswer` | N01 fixture and nil/omission tests |
+| Choice question/answer | `Choice`, `ChoiceQuestion`, `ChoiceCriteria`, `ChoiceAnswer`, `SystemOneResponse.Choice` | C01–C03 fixtures and typed-accessor tests |
+| Score question/answer | generic `Score`, `ScoreQuestion`, `ScoreAnswer`, `SystemOneResponse.Score` | S01–S04 fixtures, compilation cases, and typed-accessor tests |
+| Noul question/answer | `Noul`, `NoulQuestion`, `NoulCriteria`, `NoulAnswer`, `SystemOneResponse.Noul` | N01 fixture, nil/omission tests, and typed-accessor tests |
 | Future question/answer forms | `RawQuestion`, `UnknownAnswer` | `TestRawQuestionPreservesMemberOrder`, `TestDecodeAnswersAndRawJSON` |
 | Raw response and original JSON | `option.WithResponseInto`, `SystemOneResponse.RawJSON`, `Answer.RawJSON` | snapshot, decode-error, and raw JSON tests |
 | Status/transport errors | sentinels, `Error`, `APIError`, `TimeoutError` | `TestAPIErrorCategoriesBodyAndDumps`, timeout/cancellation tests |
@@ -67,6 +67,10 @@ func (s ModelService) List(ctx context.Context, opts ...option.RequestOption) ([
 func Choice(instructions Entry, criteria ChoiceCriteria) ChoiceQuestion
 func Score[T any](instructions Entry, levels ...T) ScoreQuestion
 func Noul(instructions Entry) NoulQuestion
+
+func (r *SystemOneResponse) Noul(name string) (NoulAnswer, error)
+func (r *SystemOneResponse) Choice(name string) (ChoiceAnswer, error)
+func (r *SystemOneResponse) Score(name string) (ScoreAnswer, error)
 
 func option.WithRetryPolicy(func(*option.RetryPolicy)) option.CommonOption
 func option.WithResponseInto(**http.Response) option.RequestOption

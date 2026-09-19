@@ -31,9 +31,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answer, ok := response.Choices()["department"]
-	if !ok {
-		log.Fatal("response did not contain a Choice answer for department")
+	answer, err := response.Choice("department")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("choice=%s confidence=%.2f probabilities=%v\n",
 		answer.Choice, answer.Confidence, answer.Probabilities)

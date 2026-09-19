@@ -29,9 +29,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answer, ok := response.Scores()["bug_severity"]
-	if !ok {
-		log.Fatal("response did not contain a Score answer for bug_severity")
+	answer, err := response.Score("bug_severity")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("score=%.2f confidence=%.2f probabilities=%v\n",
 		answer.Score, answer.Confidence, answer.Probabilities)

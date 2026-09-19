@@ -54,9 +54,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if tone, ok := resp.Choices()["tone"]; ok {
-		fmt.Println(tone.Choice, tone.Confidence)
+	tone, err := resp.Choice("tone")
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Println(tone.Choice, tone.Confidence)
 }
 ```
 
@@ -64,6 +66,10 @@ Question IDs are wire keys and response lookup keys, but the model does not use
 them for inference. Put the complete judgment in `Instructions`. State must be a
 JSON string, object, or array. Instructions and criteria entries may also be
 structured values or null.
+
+The client rejects invalid question shapes before sending: IDs must be nonempty,
+Choice accepts 1–255 options, Score accepts 2–10 levels, and Noul requires either
+non-null instructions or at least one non-null true/false description.
 
 ## Configuration
 
@@ -130,9 +136,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answer, ok := response.Choices()["department"]
-	if !ok {
-		log.Fatal("response did not contain a Choice answer for department")
+	answer, err := response.Choice("department")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("choice=%s confidence=%.2f probabilities=%v\n",
 		answer.Choice, answer.Confidence, answer.Probabilities)
@@ -180,9 +186,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answer, ok := response.Scores()["bug_severity"]
-	if !ok {
-		log.Fatal("response did not contain a Score answer for bug_severity")
+	answer, err := response.Score("bug_severity")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("score=%.2f confidence=%.2f probabilities=%v\n",
 		answer.Score, answer.Confidence, answer.Probabilities)
@@ -233,11 +239,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answers := response.Nouls()
-	humanEscalation, humanOK := answers["is_human_escalation"]
-	repeatContact, repeatOK := answers["is_repeat_contact"]
-	if !humanOK || !repeatOK {
-		log.Fatal("response did not contain both Noul answers")
+	humanEscalation, err := response.Noul("is_human_escalation")
+	if err != nil {
+		log.Fatal(err)
+	}
+	repeatContact, err := response.Noul("is_repeat_contact")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("human escalation=%.2f repeat contact=%.2f\n",
 		humanEscalation.Noul,
@@ -270,7 +278,16 @@ SDK errors work with the standard `errors` package:
 ```go
 var apiErr *typesafe.APIError
 var responseErr *typesafe.ResponseValidationError
+var timeoutErr *typesafe.TimeoutError
 switch {
+case errors.As(err, &timeoutErr):
+	log.Printf("an SDK attempt timed out after %s", timeoutErr.Duration)
+case errors.Is(err, context.Canceled):
+	log.Print("the caller canceled the complete call")
+case errors.Is(err, context.DeadlineExceeded):
+	log.Print("the caller's deadline expired")
+case errors.Is(err, typesafe.ErrConnection):
+	log.Print("the request did not produce a complete response")
 case errors.Is(err, typesafe.ErrRateLimit):
 	log.Print("rate limited; try again later")
 case errors.As(err, &responseErr):
@@ -281,6 +298,13 @@ case err != nil:
 	log.Print(err)
 }
 ```
+
+Caller cancellation and caller deadlines match their original context errors,
+also match `ErrUserAbort`, are not SDK attempt timeouts, and are never retried.
+An SDK per-attempt timeout is a `*TimeoutError` matching both `ErrTimeout` and
+`ErrConnection`. Other connection and response-body failures match
+`ErrConnection`. Non-2xx responses are `*APIError`; incompatible 2xx response
+bodies are `*ResponseValidationError` with an RFC 6901 field path.
 
 ## Retries and timeouts
 

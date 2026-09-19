@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
+- Add allocation-free singular Noul, Choice, and Score response accessors with
+  distinct missing-answer and type-mismatch errors.
+- Validate nonempty question IDs, Choice's 1–255 options, Score's 2–10 levels,
+  and meaningful Noul content locally for modeled and known raw questions.
+  This intentionally tightens pre-1.0 behavior: request shapes that were
+  previously sent to the service now fail locally when they violate these
+  documented bounds or contain no meaningful question.
+- Document transport, timeout, and caller-cancellation error categories.
+
 ## [0.1.1] - 2026-09-19
 
 - Add an explicitly invoked, two-request live conformance suite for Models.List
@@ -28,4 +39,5 @@
 
 [0.1.0]: https://github.com/unimtx/typesafe-sdk-go/releases/tag/v0.1.0
 [0.1.1]: https://github.com/unimtx/typesafe-sdk-go/releases/tag/v0.1.1
-[Unreleased]: https://github.com/unimtx/typesafe-sdk-go/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/unimtx/typesafe-sdk-go/releases/tag/v0.2.0
+[Unreleased]: https://github.com/unimtx/typesafe-sdk-go/compare/v0.2.0...HEAD

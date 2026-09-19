@@ -55,6 +55,7 @@ nested Entry data retain ordinary Go sharing semantics.
 | Configuration validation | Blank explicit API key/base URL/default model fails locally instead of reaching the service; base URL must be an absolute HTTP(S) URL without userinfo, query, or fragment. Invalid explicit options do not silently fall back. | JS `src/client.ts:259–289` is more permissive; Go design decision |
 | State shape | Reject serialized null/boolean/number root State locally; inspect encoded shape so structs and custom marshalers work. Question descriptions still admit null. | HTTP API and state guide; JS `src/types.ts:10–17` admits null |
 | Defensive Go inputs | Reject nil clients/options/question pointers, invalid raw JSON, and unsupported JSON values rather than panic. Custom callbacks and transports remain responsible for their own behavior. | JS `src/questions.ts:69–89`, `src/client.ts:70–148` |
+| Documented question limits | Reject empty question IDs, Choice counts outside 1–255, Score counts outside 2–10, and Noul questions with neither non-null instructions nor a non-null outcome description. Apply the same rules to known RawQuestion kinds. | Official Choice maximum, Score bounds, Noul, and HTTP documentation; an empty Choice has no selectable result; JS only checks the Score minimum |
 | Choice criteria | Named map from option names to Entry descriptions; question marshaling normalizes nil to {}. Standard encoding sorts keys, including numeric-looking keys lexicographically. Go map replacement semantics apply; no separate duplicate-name check or ChoiceOption/Option API. | HTTP Choice criteria object; JS `src/types.ts:34–46`, `src/questions.ts:49–62` |
 | Entry ordering | Go maps sort string keys; structs and RawMessage allow callers to choose member order. RawMessage may be compacted/escaped; it is not a byte-passthrough guarantee. | JS `src/client.ts:362`; official structured-entry guide |
 | Question helpers | Choice accepts a criteria map and shallow-copies it; generic Score copies ordered typed levels into []Entry while preserving nil/empty slices. Noul takes instructions only; literals supply criteria. Nested Entry values remain shared. | JS `src/questions.ts:16–62`; Go variadic assignability/type inference |
@@ -89,8 +90,10 @@ without evidence. Record newly introduced exports in the capability mapping.
   field/type. Arbitrary top-level request extras are not supported.
 - `UnknownAnswer` and RawJSON on SystemOneResponse/answers: preserve future fields
   and answer kinds. RawJSON is an immutable received snapshot, not a live view.
-- Nouls, Choices, Scores: grouped typed maps inspired by Python
-  `_core/response_types.py:112–125`; direct type assertions also work.
+- Noul, Choice, Score singular accessors: allocation-free typed lookups with
+  distinct missing/type-mismatch errors. Nouls, Choices, Scores remain grouped
+  typed maps inspired by Python `_core/response_types.py:112–125`; direct type
+  assertions also work.
 - ErrTypeSafe and class-specific sentinels, Error, APIError,
   ResponseValidationError, TimeoutError, APIError.RetryAfter, and error dump
   methods: Go error handling and diagnostics.
@@ -129,11 +132,10 @@ These do not justify speculative validation or live API calls.
 
 - The HTTP reference marks instructions required with string/object/array shapes,
   while the advanced guide explicitly permits null and JS also accepts omission.
-  **Decision:** retain the richer documented null shape; RawQuestion can express
-  omission without promising service acceptance. **Unverified:** whether every
-  server/model accepts both. Source inspection is not live API evidence; record
-  observed failures only during authorized live tests. Root State has no such
-  advanced-guide exception: follow its documented string/object/array shape.
+  **Decision:** retain the richer documented null shape, allow criteria-only Noul,
+  and reject a Noul only when neither instructions nor a true/false description
+  supplies a non-null value. Root State has no such advanced-guide exception:
+  follow its documented string/object/array shape.
 - Key-order effects on model inference are not a universal API guarantee. Keep
   the deliberate Go wire ordering and user-supplied structure; do not claim that
   arbitrary reorderings are semantically identical. Question independence and

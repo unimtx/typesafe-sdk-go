@@ -165,10 +165,9 @@ Keep these translation boundaries explicit:
 - Root State is string/object/array; nil State is rejected locally. Null question
   instructions/descriptions remain supported. Empty Model selects the default;
   serialization of a client request includes the resolved model.
-- Official pages currently describe Choice up to 255 options and Score up to
-  10 levels. DESIGN.md leaves maximum enforcement to the service; JS is a
-  reference for this choice, not a higher-priority contract. Do not infer
-  unlimited service capacity from absent local maximum checks.
+- Official pages describe Choice with up to 255 options and Score with 2–10
+  levels. SystemOne also rejects an empty Choice, which has no selectable result,
+  and applies the bounds to modeled and known raw questions.
 - Ordinary examples need no extra-field escape hatch. Unknown/future types,
   invalid inputs, retries, cancellation, and diagnostics are separate design
   conformance tests, not gaps in these primitive examples.

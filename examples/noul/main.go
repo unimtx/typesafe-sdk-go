@@ -31,11 +31,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	answers := response.Nouls()
-	humanEscalation, humanOK := answers["is_human_escalation"]
-	repeatContact, repeatOK := answers["is_repeat_contact"]
-	if !humanOK || !repeatOK {
-		log.Fatal("response did not contain both Noul answers")
+	humanEscalation, err := response.Noul("is_human_escalation")
+	if err != nil {
+		log.Fatal(err)
+	}
+	repeatContact, err := response.Noul("is_repeat_contact")
+	if err != nil {
+		log.Fatal(err)
 	}
 	fmt.Printf("human escalation=%.2f repeat contact=%.2f\n",
 		humanEscalation.Noul,

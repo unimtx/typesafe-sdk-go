@@ -31,9 +31,11 @@ func ExampleClient_SystemOne() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if tone, ok := resp.Choices()["tone"]; ok {
-		fmt.Println(tone.Choice, tone.Confidence)
+	tone, err := resp.Choice("tone")
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Println(tone.Choice, tone.Confidence)
 }
 
 func ExampleChoice() {
