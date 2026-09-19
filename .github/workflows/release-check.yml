@@ -1,0 +1,27 @@
+name: Release check
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Verify tag, Version, changelog, and upstream pins
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -Fq "Version = \"${version}\"" version.go
+          grep -Fq "## [${version}]" CHANGELOG.md
+          grep -Fq "66880ccded6cb642dc1809620c2b108c33730214" UPSTREAM.md
+          grep -Fq "2ce5c65f13646cab6e6f782328194c9d85f3300a" UPSTREAM.md
+          go test ./...
+          go run ./internal/tools/surfacecheck

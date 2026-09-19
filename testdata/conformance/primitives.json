@@ -1,0 +1,159 @@
+{
+  "schema": 1,
+  "retrieved": "2026-09-19",
+  "upstream_js": "66880ccded6cb642dc1809620c2b108c33730214",
+  "upstream_references": ["src/types.ts:1-149", "src/questions.ts:16-89", "src/client.ts:311-400"],
+  "response_policy": "Fixed documentation-derived or explicitly synthetic offline mocks; never live-service observations.",
+  "cases": [
+    {
+      "id": "P01", "source": "https://docs.typesafe.ai/primitives#define-a-question",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Please refund this order.","questions":{"refund_requested":{"type":"noul","instructions":"Does the customer request a refund?"}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"refund_requested":{"type":"noul","noul":0.99}},"usage":{"input_tokens":10,"output_tokens":2}}
+    },
+    {
+      "id": "P02", "source": "https://docs.typesafe.ai/primitives#reference-specific-fields",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"order":{"charges":[{"amount_usd":49,"status":"captured"},{"amount_usd":49,"status":"captured"}],"id":"A-104"},"refund_policy":"Duplicate charges are eligible for a refund.","ticket":{"messages":[{"from":"customer","text":"Please refund the duplicate."}],"subject":"Duplicate charge"}},"questions":{"policy_supports_refund":{"type":"noul","instructions":"Does `refund_policy` support the refund requested in `ticket.messages[0].text`, given `order.charges`?"}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"policy_supports_refund":{"type":"noul","noul":0.96}},"usage":{}}
+    },
+    {
+      "id": "P03", "source": "https://docs.typesafe.ai/primitives#ask-multiple-questions-together",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"refund_policy":"Cancelled flights are refundable.","ticket_message":"My flight was cancelled. Can I get a refund?"},"questions":{"frustration":{"type":"score","instructions":"How frustrated does the customer appear?","criteria":["Calm","Concerned","Very angry"]},"refund_requested":{"type":"noul","instructions":"Does `ticket_message` request a refund?"},"request_type":{"type":"choice","instructions":"What is the main request?","criteria":{"information":"Information only","rebooking":"A replacement flight","refund":"Money returned"}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"frustration":{"type":"score","score":1.2,"confidence":0.5,"legend":{"0":"Calm","1":"Concerned","2":"Very angry"},"probabilities":{"0":0,"1":0.8,"2":0.2}},"refund_requested":{"type":"noul","noul":0.98},"request_type":{"type":"choice","choice":"refund","confidence":0.9,"probabilities":{"information":0.05,"rebooking":0.05,"refund":0.9}}},"usage":{}}
+    },
+    {
+      "id": "P04", "source": "https://docs.typesafe.ai/primitives#when-one-question-depends-on-another",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"text":"Account login is broken"},"questions":{"category":{"type":"choice","instructions":"Which area?","criteria":{"account":null,"billing":null}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"category":{"type":"choice","choice":"account","confidence":0.9,"probabilities":{"account":0.9,"billing":0.1}}},"usage":{}}
+    },
+    {
+      "id": "C01", "source": "https://docs.typesafe.ai/primitives/choice#request-structure",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"My shoes are the wrong size.","questions":{"department":{"type":"choice","instructions":"Which team should handle this?","criteria":{"billing":"Charges and payments","returns":"Exchanges and refunds","shipping":"Delivery status"}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"department":{"type":"choice","choice":"returns","confidence":1,"probabilities":{"billing":0,"returns":1,"shipping":0}}},"usage":{}}
+    },
+    {
+      "id": "C02", "source": "https://docs.typesafe.ai/primitives/choice#a-more-complex-example",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"The wrong-size item was late and charged twice.","questions":{"department":{"type":"choice","instructions":"Which team?","criteria":{"billing":"Payments","returns":"Returns","shipping":"Delivery"}},"requested_resolution":{"type":"choice","instructions":"What should happen?","criteria":{"exchange":"Swap","information":"Answer","refund":"Money back","replacement":"Send again"}},"return_reason":{"type":"choice","instructions":"Why return?","criteria":{"damaged":"Broken","other":"Other","wrong_item":"Different item","wrong_size":"Does not fit"}},"shipping_issue":{"type":"choice","instructions":"Which shipping issue?","criteria":{"delayed":"Late","not_delivered":"Missing","other":"Other","wrong_address":"Wrong place"}},"tone":{"type":"choice","instructions":"What tone?","criteria":{"angry":null,"calm":null,"frustrated":null}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"department":{"type":"choice","choice":"returns","confidence":0.39,"probabilities":{"billing":0.38,"returns":0.6,"shipping":0.02}},"requested_resolution":{"type":"choice","choice":"exchange","confidence":0.16,"probabilities":{"exchange":0.37,"information":0.1,"refund":0.29,"replacement":0.24}},"return_reason":{"type":"choice","choice":"wrong_size","confidence":1,"probabilities":{"damaged":0,"other":0,"wrong_item":0,"wrong_size":1}},"shipping_issue":{"type":"choice","choice":"delayed","confidence":0.53,"probabilities":{"delayed":0.63,"not_delivered":0,"other":0.37,"wrong_address":0}},"tone":{"type":"choice","choice":"frustrated","confidence":0.88,"probabilities":{"angry":0.08,"calm":0,"frustrated":0.92}}},"usage":{}}
+    },
+    {
+      "id": "C03", "source": "https://docs.typesafe.ai/primitives/choice#structured-instructions-and-criteria",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"order":{"status":"delivered"},"policy":{"days":30}},"questions":{"intent":{"type":"choice","instructions":{"compare":["order.status","policy.days"],"task":"Classify request"},"criteria":{"return_policy":{"covers":["eligibility","rules"]},"return_status":{"covers":["tracking","progress"]}}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"intent":{"type":"choice","choice":"return_status","confidence":0.8,"probabilities":{"return_policy":0.2,"return_status":0.8}}},"usage":{}}
+    },
+    {
+      "id": "S01", "source": "https://docs.typesafe.ai/primitives/score#request-structure",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Export crashes Safari but works in Chrome.","questions":{"bug_severity":{"type":"score","instructions":"How severe is the reported issue?","criteria":["Cosmetic; no impact","Broken but workaround exists","Blocking; no workaround"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"bug_severity":{"type":"score","score":1.3,"confidence":0.54,"legend":{"0":"Cosmetic; no impact","1":"Broken but workaround exists","2":"Blocking; no workaround"},"probabilities":{"0":0,"1":0.7,"2":0.3}}},"usage":{}}
+    },
+    {
+      "id": "S02", "source": "https://docs.typesafe.ai/primitives/score#reading-a-score",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"The spinner never finishes; CSV may work.","questions":{"severity":{"type":"score","instructions":"Rate severity.","criteria":["0","1","2"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"severity":{"type":"score","score":1.12,"confidence":0.81,"legend":{"0":"0","1":"1","2":"2"},"probabilities":{"0":0,"1":0.88,"2":0.12}}},"usage":{}}
+    },
+    {
+      "id": "S03", "source": "https://docs.typesafe.ai/primitives/score#splitting-a-complex-judgment-into-several-scores",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Export fails for the third time. Safari 18, click Export, spinner hangs.","questions":{"frustration":{"type":"score","instructions":"How frustrated?","criteria":["Calm","Frustrated","Very angry"]},"report_quality":{"type":"score","instructions":"How useful is the report?","criteria":["No detail","Names feature","Steps or environment","Steps and environment"]},"severity":{"type":"score","instructions":"How severe?","criteria":["Cosmetic","Workaround exists","Blocking"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"frustration":{"type":"score","score":1.45,"confidence":0.33,"legend":{"0":"Calm","1":"Frustrated","2":"Very angry"},"probabilities":{"0":0,"1":0.55,"2":0.45}},"report_quality":{"type":"score","score":3,"confidence":1,"legend":{"0":"No detail","1":"Names feature","2":"Steps or environment","3":"Steps and environment"},"probabilities":{"0":0,"1":0,"2":0,"3":1}},"severity":{"type":"score","score":1.24,"confidence":0.63,"legend":{"0":"Cosmetic","1":"Workaround exists","2":"Blocking"},"probabilities":{"0":0,"1":0.76,"2":0.24}}},"usage":{}}
+    },
+    {
+      "id": "S04", "source": "https://docs.typesafe.ai/primitives/score#structured-level-descriptions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"change":{"files":8,"services":["api","worker"]}},"questions":{"scope":{"type":"score","instructions":{"task":"Evaluate change scope"},"criteria":[{"impact":"local","signals":["one file"]},{"impact":"moderate","signals":["several files"]},{"impact":"broad","signals":["multiple services"]}]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"scope":{"type":"score","score":1.8,"confidence":0.6,"legend":{"0":{"impact":"local"},"1":{"impact":"moderate"},"2":{"impact":"broad","signals":["multiple services"]}},"probabilities":{"0":0,"1":0.2,"2":0.8}}},"usage":{}}
+    },
+    {
+      "id": "N01", "source": "https://docs.typesafe.ai/primitives/noul#request",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"I already contacted support. Please get a human.","questions":{"is_human_escalation":{"type":"noul","instructions":"Does the customer request a human?"},"is_repeat_contact":{"type":"noul","instructions":"Has the customer contacted support before?","criteria":{"true":"Mentions an earlier contact","false":"No earlier contact"}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"is_human_escalation":{"type":"noul","noul":0.99},"is_repeat_contact":{"type":"noul","noul":0.93}},"usage":{}}
+    },
+    {
+      "id": "A01", "source": "https://docs.typesafe.ai/primitives/advanced#structured-instructions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"invoice":{"amount":120,"currency":"USD"}},"questions":{"category":{"type":"choice","instructions":{"field":"invoice.currency","task":"Classify currency"},"criteria":{"supported":null,"unsupported":null}},"risk":{"type":"score","instructions":{"field":"invoice.amount","task":"Rate risk"},"criteria":["low","high"]},"urgency":{"type":"score","instructions":{"task":"Rate urgency"},"criteria":["later","now"]},"valid":{"type":"noul","instructions":{"required":["amount","currency"],"task":"Verify invoice"}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"category":{"type":"choice","choice":"supported","confidence":1,"probabilities":{"supported":1,"unsupported":0}},"risk":{"type":"score","score":0.2,"confidence":0.8,"legend":{"0":"low","1":"high"},"probabilities":{"0":0.8,"1":0.2}},"urgency":{"type":"score","score":0.1,"confidence":0.9,"legend":{"0":"later","1":"now"},"probabilities":{"0":0.9,"1":0.1}},"valid":{"type":"noul","noul":0.99}},"usage":{}}
+    },
+    {
+      "id": "A02", "source": "https://docs.typesafe.ai/primitives/advanced#instructions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"actual":{"total":10},"expected":{"total":10}},"questions":{"array_form":{"type":"noul","instructions":["actual.total","expected.total"]},"matches":{"type":"noul","instructions":{"fields":["actual.total","expected.total"],"task":"Compare fields"}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"array_form":{"type":"noul","noul":0.99},"matches":{"type":"noul","noul":0.99}},"usage":{}}
+    },
+    {
+      "id": "A03", "source": "https://docs.typesafe.ai/primitives/advanced#choice-criteria",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Where is order A-1?","questions":{"team":{"type":"choice","instructions":"Which team?","criteria":{"account":{"examples":["login","profile"],"scope":"Accounts"},"billing":{"examples":["charge","invoice"],"scope":"Payments"},"orders":{"examples":["tracking","return"],"scope":"Orders"}}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"team":{"type":"choice","choice":"orders","confidence":1,"probabilities":{"account":0,"billing":0,"orders":1}}},"usage":{}}
+    },
+    {
+      "id": "A04", "source": "https://docs.typesafe.ai/primitives/advanced#hierarchical-classification",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Cannot reset my password.","questions":{"category":{"type":"choice","instructions":"Choose top-level category.","criteria":{"account":{"children":["login","profile"]},"orders":{"children":["delivery","returns"]}}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"category":{"type":"choice","choice":"account","confidence":0.95,"probabilities":{"account":0.95,"orders":0.05}}},"usage":{}}
+    },
+    {
+      "id": "A05", "source": "https://docs.typesafe.ai/primitives/advanced#score-criteria",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"change":{"files":["api.go","worker.go"]}},"questions":{"scope":{"type":"score","instructions":{"task":"Evaluate scope"},"criteria":[{"label":"small","signals":["one component"]},{"label":"large","signals":["several components"]}]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"scope":{"type":"score","score":0.8,"confidence":0.6,"legend":{"0":{"label":"small"},"1":{"label":"large"}},"probabilities":{"0":0.2,"1":0.8}}},"usage":{}}
+    },
+    {
+      "id": "A06", "source": "https://docs.typesafe.ai/primitives/advanced#noul-criteria",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":{"message":"Send me your password."},"questions":{"credential_request":{"type":"noul","instructions":{"field":"message","task":"Detect credential request"},"criteria":{"true":{"examples":["password","token"],"meaning":"Requests a secret"},"false":{"meaning":"Does not request a secret"}}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"credential_request":{"type":"noul","noul":0.99}},"usage":{}}
+    },
+    {
+      "id": "P03-api-outage", "source": "https://docs.typesafe.ai/primitives#ask-multiple-questions-together",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"The payments API is down and customers cannot check out.","questions":{"category":{"type":"choice","instructions":"What kind of incident is this?","criteria":{"api":null,"database":null,"network":null}},"outage":{"type":"noul","instructions":"Is this a service outage?"},"severity":{"type":"score","instructions":"How severe is the incident?","criteria":["minor","degraded","blocking"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"category":{"type":"choice","choice":"api","confidence":1,"probabilities":{"api":1,"database":0,"network":0}},"outage":{"type":"noul","noul":0.99},"severity":{"type":"score","score":2,"confidence":1,"legend":{"0":"minor","1":"degraded","2":"blocking"},"probabilities":{"0":0,"1":0,"2":1}}},"usage":{}}
+    },
+    {
+      "id": "C01-language", "source": "https://docs.typesafe.ai/primitives/choice#example-questions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"package main","questions":{"language":{"type":"choice","instructions":"What programming language is this?","criteria":{"go":null,"javascript":null,"other":null,"python":null,"rust":null,"typescript":null}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"language":{"type":"choice","choice":"go","confidence":1,"probabilities":{"go":1,"javascript":0,"other":0,"python":0,"rust":0,"typescript":0}}},"usage":{}}
+    },
+    {
+      "id": "C01-meeting", "source": "https://docs.typesafe.ai/primitives/choice#example-questions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Daily team sync","questions":{"meeting":{"type":"choice","instructions":"What type of meeting is this?","criteria":{"brainstorm":null,"none":null,"one_on_one":null,"planning":null,"retrospective":null,"standup":null}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"meeting":{"type":"choice","choice":"standup","confidence":1,"probabilities":{"brainstorm":0,"none":0,"one_on_one":0,"planning":0,"retrospective":0,"standup":1}}},"usage":{}}
+    },
+    {
+      "id": "C01-category", "source": "https://docs.typesafe.ai/primitives/choice#example-questions",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Cotton shirt","questions":{"category":{"type":"choice","instructions":"Which product category?","criteria":{"clothing":null,"electronics":null,"food_beverage":null,"home_garden":null}}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"category":{"type":"choice","choice":"clothing","confidence":1,"probabilities":{"clothing":1,"electronics":0,"food_beverage":0,"home_garden":0}}},"usage":{}}
+    },
+    {
+      "id": "S02-low", "source": "https://docs.typesafe.ai/primitives/score#reading-a-score",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"The export button is misaligned by a few pixels.","questions":{"severity":{"type":"score","instructions":"How severe is the reported issue?","criteria":["Cosmetic","Workaround exists","Blocking"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"severity":{"type":"score","score":0,"confidence":1,"legend":{"0":"Cosmetic","1":"Workaround exists","2":"Blocking"},"probabilities":{"0":1,"1":0,"2":0}}},"usage":{}}
+    },
+    {
+      "id": "S02-middle", "source": "https://docs.typesafe.ai/primitives/score#reading-a-score",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"PDF export fails but CSV is a workaround.","questions":{"severity":{"type":"score","instructions":"How severe is the reported issue?","criteria":["Cosmetic","Workaround exists","Blocking"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"severity":{"type":"score","score":1,"confidence":1,"legend":{"0":"Cosmetic","1":"Workaround exists","2":"Blocking"},"probabilities":{"0":0,"1":1,"2":0}}},"usage":{}}
+    },
+    {
+      "id": "S02-high", "source": "https://docs.typesafe.ai/primitives/score#reading-a-score",
+      "method": "POST", "path": "/v1/systemone", "headers": {"Content-Type":"application/json"},
+      "request": {"state":"Nobody can log in; every attempt returns 500.","questions":{"severity":{"type":"score","instructions":"How severe is the reported issue?","criteria":["Cosmetic","Workaround exists","Blocking"]}},"model":"jev-latest"},
+      "response": {"model":"jev-latest","answers":{"severity":{"type":"score","score":2,"confidence":1,"legend":{"0":"Cosmetic","1":"Workaround exists","2":"Blocking"},"probabilities":{"0":0,"1":0,"2":1}}},"usage":{}}
+    }
+  ]
+}
